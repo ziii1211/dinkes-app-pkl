@@ -5,7 +5,7 @@
     <style>
         body { font-family: 'Times New Roman', Times, serif; font-size: 12px; margin: 0; padding: 0; }
         
-        /* KOP SURAT STYLE */
+        /* KOP SURAT */
         .kop-surat { width: 100%; border-bottom: 4px double #000; padding-bottom: 10px; margin-bottom: 20px; }
         .logo-cell { width: 15%; text-align: center; vertical-align: middle; }
         .logo-img { width: 85px; height: auto; }
@@ -14,7 +14,7 @@
         .text-header-2 { font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 2px 0; }
         .text-address { font-size: 10pt; font-weight: normal; margin: 0; }
 
-        /* CONTENT STYLE */
+        /* CONTENT */
         .judul-laporan { text-align: center; margin-bottom: 15px; font-weight: bold; font-size: 12pt; text-transform: uppercase; }
         table.data { width: 100%; border-collapse: collapse; margin-top: 10px; }
         table.data th, table.data td { border: 1px solid #000; padding: 6px; }
@@ -26,7 +26,7 @@
 </head>
 <body>
     
-    {{-- KOP SURAT RESMI --}}
+    {{-- KOP SURAT --}}
     <table class="kop-surat">
         <tr>
             <td class="logo-cell">
@@ -59,14 +59,21 @@
         <tbody>
             @foreach($pegawais as $index => $p)
                 @php 
-                    $pk = $p->jabatan?->perjanjianKinerja->first(); 
+                    // PERBAIKAN LOGIC DI SINI:
+                    // Kita paksa urutkan ulang berdasarkan 'updated_at' descending (terbaru di atas)
+                    // Lalu ambil yang pertama. Ini menjamin data yang diambil adalah yang terakhir di-edit.
+                    $pk = $p->jabatan?->perjanjianKinerja->sortByDesc('updated_at')->first(); 
                 @endphp
                 <tr>
                     <td style="text-align: center;">{{ $index + 1 }}</td>
-                    <td>{{ $p->nama }}<br><small>NIP. {{ $p->nip }}</small></td>
+                    <td>
+                        {{ $p->nama }}<br>
+                        <small>NIP. {{ $p->nip }}</small>
+                    </td>
                     <td>{{ $p->jabatan->nama ?? '-' }}</td>
                     <td style="text-align: center;">
-                        @if($pk && $pk->status == 'final')
+                        {{-- Logic Status Case Insensitive --}}
+                        @if($pk && strtolower($pk->status) == 'final')
                             <span class="badge bg-green">FINAL</span>
                         @else
                             <span class="badge bg-grey">DRAFT / BELUM</span>

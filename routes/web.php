@@ -82,20 +82,27 @@ Route::middleware('auth')->group(function () {
         // --- GROUP LOGIC CETAK PDF LAPORAN ---
         Route::prefix('laporan/cetak')->group(function () {
 
-            // A. LAPORAN STATUS PENGISIAN PK
+            // A. LAPORAN STATUS PENGISIAN PK (PERBAIKAN UTAMA: AMBIL DATA TERBARU/LATEST)
             Route::get('/status-pk', function (Request $request) {
                 $tahun = (int) ($request->year ?? date('Y'));
                 $status = $request->status ?? 'all';
 
+                // Query Updated: Pakai latest('updated_at') agar dapat yang Final/Terbaru
                 $pegawais = Pegawai::with(['jabatan', 'jabatan.perjanjianKinerja' => function($q) use($tahun) {
-                    $q->where('tahun', $tahun);
+                    $q->where('tahun', $tahun)->latest('updated_at'); 
                 }])->orderBy('nama', 'asc')->get();
 
+                // Filter manual collection
                 if ($status !== 'all') {
                     $pegawais = $pegawais->filter(function ($p) use ($status) {
-                        $pk = $p->jabatan?->perjanjianKinerja->first();
-                        if ($status == 'draft') return !$pk || $pk->status == 'draft';
-                        if ($status == 'final') return $pk && $pk->status == 'final';
+                        // Karena sudah di-latest(), first() akan ambil yang paling baru
+                        $pk = $p->jabatan?->perjanjianKinerja->first(); 
+                        
+                        // Normalisasi status ke huruf kecil
+                        $statusPk = $pk ? strtolower($pk->status) : ''; 
+                        
+                        if ($status == 'draft') return !$pk || $statusPk == 'draft';
+                        if ($status == 'final') return $pk && $statusPk == 'final';
                         return true;
                     });
                 }
@@ -119,12 +126,12 @@ Route::middleware('auth')->group(function () {
             })->name('laporan.sub-kegiatan.print');
 
 
-            // C. LAPORAN KINERJA BULANAN (UPDATE BAHASA INDONESIA)
+            // C. LAPORAN KINERJA BULANAN
             Route::get('/bulanan', function (Request $request) {
                 $bulan = (int) ($request->month ?? date('n'));
                 $tahun = (int) ($request->year ?? date('Y'));
                 
-                // --- PERBAIKAN: PAKAI ARRAY MANUAL BIAR PASTI INDONESIA ---
+                // Array Bulan Indonesia Manual
                 $daftarBulan = [
                     1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 
                     5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 
@@ -132,9 +139,9 @@ Route::middleware('auth')->group(function () {
                 ];
                 $nama_bulan = $daftarBulan[$bulan] ?? 'Bulan Tidak Valid';
 
-                // Query Data
+                // Query Data (Ditambah latest() juga biar aman)
                 $pegawais = Pegawai::with(['jabatan', 'jabatan.perjanjianKinerja' => function($q) use ($tahun) {
-                        $q->where('tahun', $tahun);
+                        $q->where('tahun', $tahun)->latest('updated_at');
                     }, 
                     'jabatan.perjanjianKinerja.sasarans.indikators.realisasi' => function($q) use ($bulan, $tahun) {
                         $q->where('bulan', $bulan)->where('tahun', $tahun);
@@ -147,12 +154,12 @@ Route::middleware('auth')->group(function () {
             })->name('laporan.bulanan.print');
 
 
-            // D. LAPORAN TOP PERFORMER (UPDATE BAHASA INDONESIA)
+            // D. LAPORAN TOP PERFORMER
             Route::get('/top-performer', function (Request $request) {
                 $bulan = (int) ($request->month ?? date('n'));
                 $tahun = (int) ($request->year ?? date('Y'));
                 
-                // --- PERBAIKAN: PAKAI ARRAY MANUAL JUGA ---
+                // Array Bulan Indonesia Manual
                 $daftarBulan = [
                     1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 
                     5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 
@@ -166,8 +173,11 @@ Route::middleware('auth')->group(function () {
                     $jumlahIndikator = 0;
 
                     if ($pegawai->jabatan) {
+                        // Tambahkan latest() disini juga
                         $pk = PkModel::where('jabatan_id', $pegawai->jabatan_id)
-                            ->where('tahun', $tahun)->with('sasarans.indikators.realisasi')->first();
+                            ->where('tahun', $tahun)
+                            ->latest('updated_at')
+                            ->with('sasarans.indikators.realisasi')->first();
 
                         if ($pk) {
                             foreach ($pk->sasarans as $sasaran) {
