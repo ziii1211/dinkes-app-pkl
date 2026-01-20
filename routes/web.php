@@ -25,9 +25,10 @@ use App\Livewire\PerjanjianKinerjaLihat;
 use App\Livewire\PengukuranBulanan;
 use App\Livewire\PengukuranKinerja as DetailPengukuranKinerja;
 use App\Livewire\PengaturanKinerja;
+use App\Livewire\Laporan\Index as LaporanIndex; 
 
 // --- 2. MODELS ---
-use App\Models\PerjanjianKinerja as PkModel; // Alias biar gak bentrok sama Livewire
+use App\Models\PerjanjianKinerja as PkModel;
 use App\Models\Jabatan;
 use App\Models\Pegawai;
 use App\Models\Tujuan;
@@ -41,6 +42,7 @@ use App\Models\PohonKinerja;
 use App\Exports\DokumenRenstraExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request; 
 
 /*
 |--------------------------------------------------------------------------
@@ -55,7 +57,7 @@ Route::get('/login', Login::class)->name('login');
 // --- ROUTES YANG BUTUH LOGIN (MIDDLEWARE AUTH) ---
 Route::middleware('auth')->group(function () {
 
-    // 1. LOGOUT (POST METHOD)
+    // 1. LOGOUT
     Route::post('/logout', function () {
         auth()->logout();
         session()->invalidate();
@@ -64,7 +66,7 @@ Route::middleware('auth')->group(function () {
     })->name('logout');
 
 
-    // 2. DASHBOARD
+    // 2. DASHBOARD UTAMA
     Route::get('/', Dashboard::class)->name('dashboard');
 
 
@@ -73,6 +75,125 @@ Route::middleware('auth')->group(function () {
         Route::get('/admin/dashboard', AdminDashboard::class)->name('admin.dashboard');
         Route::get('/admin/atur-jadwal', AturJadwal::class)->name('admin.atur-jadwal');
         Route::get('/admin/manajemen-user', ManajemenUser::class)->name('admin.manajemen-user');
+        
+        // --- ROUTE PUSAT LAPORAN ---
+        Route::get('/admin/laporan', LaporanIndex::class)->name('laporan.index');
+
+        // --- GROUP LOGIC CETAK PDF LAPORAN ---
+        Route::prefix('laporan/cetak')->group(function () {
+
+            // A. LAPORAN STATUS PENGISIAN PK
+            Route::get('/status-pk', function (Request $request) {
+                $tahun = (int) ($request->year ?? date('Y'));
+                $status = $request->status ?? 'all';
+
+                $pegawais = Pegawai::with(['jabatan', 'jabatan.perjanjianKinerja' => function($q) use($tahun) {
+                    $q->where('tahun', $tahun);
+                }])->orderBy('nama', 'asc')->get();
+
+                if ($status !== 'all') {
+                    $pegawais = $pegawais->filter(function ($p) use ($status) {
+                        $pk = $p->jabatan?->perjanjianKinerja->first();
+                        if ($status == 'draft') return !$pk || $pk->status == 'draft';
+                        if ($status == 'final') return $pk && $pk->status == 'final';
+                        return true;
+                    });
+                }
+
+                $pdf = Pdf::loadView('cetak.laporan-status-pk', compact('pegawais', 'tahun', 'status'));
+                $pdf->setPaper('a4', 'portrait');
+                return $pdf->stream('Laporan_Status_PK_'.$tahun.'.pdf');
+            })->name('laporan.status-pk.print');
+
+
+            // B. LAPORAN REKAP SUB KEGIATAN
+            Route::get('/sub-kegiatan', function (Request $request) {
+                $tahun = (int) ($request->year ?? date('Y'));
+                
+                $subKegiatans = SubKegiatan::with(['indikators', 'kegiatan.program'])
+                    ->get();
+
+                $pdf = Pdf::loadView('cetak.laporan-sub-kegiatan', compact('subKegiatans', 'tahun'));
+                $pdf->setPaper('a4', 'landscape');
+                return $pdf->stream('Laporan_Sub_Kegiatan_'.$tahun.'.pdf');
+            })->name('laporan.sub-kegiatan.print');
+
+
+            // C. LAPORAN KINERJA BULANAN (UPDATE BAHASA INDONESIA)
+            Route::get('/bulanan', function (Request $request) {
+                $bulan = (int) ($request->month ?? date('n'));
+                $tahun = (int) ($request->year ?? date('Y'));
+                
+                // --- PERBAIKAN: PAKAI ARRAY MANUAL BIAR PASTI INDONESIA ---
+                $daftarBulan = [
+                    1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 
+                    5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 
+                    9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+                ];
+                $nama_bulan = $daftarBulan[$bulan] ?? 'Bulan Tidak Valid';
+
+                // Query Data
+                $pegawais = Pegawai::with(['jabatan', 'jabatan.perjanjianKinerja' => function($q) use ($tahun) {
+                        $q->where('tahun', $tahun);
+                    }, 
+                    'jabatan.perjanjianKinerja.sasarans.indikators.realisasi' => function($q) use ($bulan, $tahun) {
+                        $q->where('bulan', $bulan)->where('tahun', $tahun);
+                    }
+                ])->whereHas('jabatan')->orderBy('nama')->get();
+
+                $pdf = Pdf::loadView('cetak.laporan-bulanan', compact('pegawais', 'bulan', 'tahun', 'nama_bulan'));
+                $pdf->setPaper('a4', 'landscape');
+                return $pdf->stream('Laporan_Bulanan_'.$nama_bulan.'_'.$tahun.'.pdf');
+            })->name('laporan.bulanan.print');
+
+
+            // D. LAPORAN TOP PERFORMER (UPDATE BAHASA INDONESIA)
+            Route::get('/top-performer', function (Request $request) {
+                $bulan = (int) ($request->month ?? date('n'));
+                $tahun = (int) ($request->year ?? date('Y'));
+                
+                // --- PERBAIKAN: PAKAI ARRAY MANUAL JUGA ---
+                $daftarBulan = [
+                    1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April', 
+                    5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus', 
+                    9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+                ];
+                $nama_bulan = $daftarBulan[$bulan] ?? 'Bulan Tidak Valid';
+
+                // Hitung Data
+                $pegawais = Pegawai::with(['jabatan'])->get()->map(function($pegawai) use ($bulan, $tahun) {
+                    $totalCapaian = 0;
+                    $jumlahIndikator = 0;
+
+                    if ($pegawai->jabatan) {
+                        $pk = PkModel::where('jabatan_id', $pegawai->jabatan_id)
+                            ->where('tahun', $tahun)->with('sasarans.indikators.realisasi')->first();
+
+                        if ($pk) {
+                            foreach ($pk->sasarans as $sasaran) {
+                                foreach ($sasaran->indikators as $indikator) {
+                                    $realisasi = $indikator->realisasi->where('bulan', $bulan)->where('tahun', $tahun)->first();
+                                    if ($realisasi) {
+                                        $totalCapaian += $realisasi->capaian;
+                                        $jumlahIndikator++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    $pegawai->rata_rata = $jumlahIndikator > 0 ? round($totalCapaian / $jumlahIndikator, 2) : 0;
+                    return $pegawai;
+                });
+
+                $sortedPegawais = $pegawais->sortByDesc('rata_rata')->values();
+
+                $pdf = Pdf::loadView('cetak.laporan-top-performer', compact('sortedPegawais', 'bulan', 'tahun', 'nama_bulan'));
+                $pdf->setPaper('a4', 'portrait');
+                return $pdf->stream('Top_Performer_'.$nama_bulan.'_'.$tahun.'.pdf');
+            })->name('laporan.top-performer.print');
+
+        });
     });
 
 
@@ -82,7 +203,7 @@ Route::middleware('auth')->group(function () {
     });
 
 
-    // 5. FITUR DOWNLOAD AMAN (SECURE FILE DOWNLOAD)
+    // 5. FITUR DOWNLOAD AMAN
     Route::get('/dokumen/unduh/{folder}/{filename}', function ($folder, $filename) {
         $path = $folder . '/' . $filename;
         if (!Storage::exists($path)) {
@@ -147,16 +268,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/perjanjian-kinerja/{id}', PerjanjianKinerjaDetail::class)->name('perjanjian.kinerja.detail');
         Route::get('/perjanjian-kinerja/lihat/{id}', PerjanjianKinerjaLihat::class)->name('perjanjian.kinerja.lihat');
         
-        // CETAK PERJANJIAN KINERJA (UPDATED)
+        // CETAK PERJANJIAN KINERJA
         Route::get('/perjanjian-kinerja/cetak/{id}', function ($id) {
-            // 1. Ambil Data PK Lengkap
             $pk = PkModel::with(['jabatan', 'pegawai', 'sasarans.indikators', 'anggarans.subKegiatan'])->findOrFail($id);
             $jabatan = $pk->jabatan;
             
-            // 2. Tentukan Logic Kepala Dinas / Atasan
             $is_kepala_dinas = is_null($jabatan->parent_id);
             $atasan_pegawai = null;
-            $atasan_jabatan = null; // <--- Variabel penting untuk Pihak Pertama
+            $atasan_jabatan = null;
 
             if ($jabatan->parent_id) {
                 $parentJabatan = Jabatan::find($jabatan->parent_id);
@@ -166,14 +285,13 @@ Route::middleware('auth')->group(function () {
                 }
             }
             
-            // 3. Load PDF dengan Data Lengkap
             $pdf = Pdf::loadView('cetak.perjanjian-kinerja', [
                 'pk' => $pk,
                 'jabatan' => $jabatan,
                 'pegawai' => $pk->pegawai,
                 'is_kepala_dinas' => $is_kepala_dinas,
                 'atasan_pegawai' => $atasan_pegawai,
-                'atasan_jabatan' => $atasan_jabatan // <--- Pastikan ini terkirim
+                'atasan_jabatan' => $atasan_jabatan
             ]);
 
             $pdf->setPaper('a4', 'portrait');

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 <head>
@@ -186,6 +187,9 @@
                             @if(auth()->user()->role == 'admin')
                                 <a href="{{ route('admin.manajemen-user') }}" class="text-gray-800 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-400 font-bold px-3 py-2 text-sm uppercase tracking-wide transition-colors whitespace-nowrap {{ request()->routeIs('admin.manajemen-user') ? 'text-blue-700 dark:text-blue-400' : '' }}">
                                     Manajemen User
+                                </a>
+                                <a href="{{ route('laporan.index') }}" class="text-gray-800 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-400 font-bold px-3 py-2 text-sm uppercase tracking-wide transition-colors whitespace-nowrap {{ request()->routeIs('laporan.index') ? 'text-blue-700 dark:text-blue-400' : '' }}">
+                                Laporan
                                 </a>
                             @endif
 

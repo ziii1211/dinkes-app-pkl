@@ -19,6 +19,11 @@ class Jabatan extends Model
         return $this->hasOne(Pegawai::class, 'jabatan_id');
     }
 
+    public function perjanjianKinerja()
+    {
+        return $this->hasMany(PerjanjianKinerja::class, 'jabatan_id');
+    }
+
     // Jika tabel jabatan punya parent (untuk struktur pohon)
     public function parent()
     {
