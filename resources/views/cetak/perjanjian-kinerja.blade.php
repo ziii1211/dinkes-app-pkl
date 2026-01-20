@@ -7,7 +7,7 @@
         /* 1. SETUP HALAMAN PDF */
         @page { 
             size: A4 portrait; 
-            margin: 2.5cm 2.5cm; 
+            margin: 2cm 2cm; 
         }
         
         body { 
@@ -20,6 +20,15 @@
             line-height: 1.3;
         }
 
+        /* 2. KOP SURAT RESMI */
+        .kop-surat { width: 100%; border-bottom: 4px double #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .logo-cell { width: 15%; text-align: center; vertical-align: middle; }
+        .logo-img { width: 80px; height: auto; }
+        .text-cell { width: 85%; text-align: center; vertical-align: middle; padding-right: 15%; }
+        .text-header-1 { font-size: 14pt; font-weight: bold; text-transform: uppercase; margin: 0; }
+        .text-header-2 { font-size: 16pt; font-weight: bold; text-transform: uppercase; margin: 2px 0; }
+        .text-address { font-size: 10pt; font-weight: normal; margin: 0; }
+
         /* UTILITIES */
         .text-center { text-align: center; }
         .text-right { text-align: right; }
@@ -27,12 +36,12 @@
         .font-bold { font-weight: bold; }
         .uppercase { text-transform: uppercase; }
 
-        /* HEADER SURAT */
+        /* HEADER JUDUL */
         .header-title {
             font-size: 12pt;
             font-weight: bold;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             text-transform: uppercase;
             line-height: 1.5;
         }
@@ -55,12 +64,12 @@
             font-weight: bold;
         }
 
-        /* TABEL ANGGARAN (BORDERLESS) */
+        /* TABEL ANGGARAN */
         .table-budget {
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
         }
         .table-budget td {
             padding: 4px 5px;
@@ -75,16 +84,15 @@
         .table-signature {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px; /* Jarak dari tabel anggaran */
+            margin-top: 10px;
             page-break-inside: avoid; 
         }
         .table-signature td {
             border: none;
             text-align: center;
-            vertical-align: top; /* Pastikan konten nempel atas */
+            vertical-align: top;
             padding: 0;
         }
-        /* Row khusus untuk spasi tanda tangan */
         .row-space td {
             height: 80px;
             vertical-align: middle;
@@ -97,6 +105,22 @@
 </head>
 <body>
 
+    {{-- KOP SURAT --}}
+    <table class="kop-surat">
+        <tr>
+            <td class="logo-cell">
+                <img src="{{ public_path('Coat_of_arms_of_South_Kalimantan.svg.png') }}" class="logo-img" alt="Logo">
+            </td>
+            <td class="text-cell">
+                <div class="text-header-1">PEMERINTAH PROVINSI KALIMANTAN SELATAN</div>
+                <div class="text-header-2">DINAS KESEHATAN</div>
+                <div class="text-address">Jalan Belitung Darat No.118 Banjarmasin Kode Pos 70116</div>
+                <div class="text-address">Telepon : (0511) 3355661 – 3352575 (Fax - 3359735)</div>
+                <div class="text-address">Email : keskalsel@gmail.com Website : https://dinkes.kalselprov.go.id</div>
+            </td>
+        </tr>
+    </table>
+
     {{-- JUDUL --}}
     <div class="header-title">
         PERJANJIAN KINERJA TAHUN {{ $pk->tahun }}<br>
@@ -105,7 +129,7 @@
         PROVINSI KALIMANTAN SELATAN
     </div>
 
-    {{-- TABEL 1: SASARAN --}}
+    {{-- TABEL SASARAN --}}
     <table class="table-main">
         <thead>
             <tr>
@@ -126,16 +150,19 @@
                 @if($countIndikator > 0)
                     @foreach($sasaran->indikators as $index => $ind)
                         <tr>
+                            {{-- Merge Cell untuk Sasaran --}}
                             @if($index === 0)
                                 <td rowspan="{{ $rowspan }}" class="text-center">{{ $no++ }}.</td>
+                                {{-- PERBAIKAN: Menggunakan 'sasaran' sesuai database --}}
                                 <td rowspan="{{ $rowspan }}">{{ $sasaran->sasaran }}</td>
                             @endif
 
                             <td style="padding-left: 10px;">{{ $ind->nama_indikator }}</td>
                             <td class="text-center">
                                 @php 
-                                    $colTarget = 'target_' . $pk->tahun;
-                                    $val = $ind->$colTarget ?? $ind->target; 
+                                    $colTarget = $pk->tahun == 2025 ? 'target_2025' : 'target_2026';
+                                    $val = $ind->$colTarget;
+                                    // Format angka target (hilangkan desimal .00)
                                     $val = (float)$val == (int)$val ? (int)$val : $val;
                                 @endphp
                                 {{ $val }} {{ $ind->satuan }}
@@ -143,8 +170,10 @@
                         </tr>
                     @endforeach
                 @else
+                    {{-- Jika tidak ada indikator, tetap tampilkan baris sasaran --}}
                     <tr>
                         <td class="text-center">{{ $no++ }}.</td>
+                        {{-- PERBAIKAN: Menggunakan 'sasaran' sesuai database --}}
                         <td>{{ $sasaran->sasaran }}</td>
                         <td>-</td>
                         <td class="text-center">-</td>
@@ -154,7 +183,7 @@
         </tbody>
     </table>
 
-    {{-- TABEL 2: ANGGARAN --}}
+    {{-- TABEL ANGGARAN --}}
     <table class="table-budget">
         <thead>
             <tr>
@@ -172,7 +201,7 @@
                         @if($anggaran->subKegiatan)
                             {{ $anggaran->subKegiatan->nama }}
                         @else
-                            {{ preg_replace('/^[\d\.]+\s*/', '', $anggaran->nama_program_kegiatan) }}
+                            {{ preg_replace('/^[\d\.]+\s*/', '', $anggaran->nama_program_kegiatan ?? '-') }}
                         @endif
                     </td>
                     <td class="text-right">
@@ -190,11 +219,10 @@
         </tbody>
     </table>
 
-    {{-- TABEL 3: TANDA TANGAN (PERBAIKAN STRUKTUR) --}}
+    {{-- TANDA TANGAN --}}
     <table class="table-signature">
-        {{-- BARIS 1: JUDUL PIHAK & JABATAN (Akan expand sesuai teks terpanjang) --}}
         <tr>
-            {{-- KIRI: PIHAK PERTAMA --}}
+            {{-- PIHAK PERTAMA --}}
             <td style="width: 50%; padding-bottom: 0;">
                 <p class="font-bold" style="margin-bottom: 5px;">PIHAK PERTAMA,</p>
                 <p class="font-bold uppercase" style="margin-top: 0;">
@@ -202,7 +230,7 @@
                 </p>
             </td>
 
-            {{-- KANAN: PIHAK KEDUA --}}
+            {{-- PIHAK KEDUA --}}
             <td style="width: 50%; padding-bottom: 0;">
                 <p class="font-bold" style="margin-bottom: 5px;">PIHAK KEDUA,</p>
                 @if($is_kepala_dinas)
@@ -221,15 +249,13 @@
             </td>
         </tr>
 
-        {{-- BARIS 2: SPASI TANDA TANGAN (Tinggi Fix, sejajar kiri kanan) --}}
         <tr class="row-space">
             <td>&nbsp;</td>
             <td>&nbsp;</td>
         </tr>
 
-        {{-- BARIS 3: NAMA & NIP (Akan mulai di posisi vertikal yang sama) --}}
         <tr>
-            {{-- KIRI: NAMA PIHAK PERTAMA --}}
+            {{-- NAMA PIHAK PERTAMA --}}
             <td>
                 @if($pegawai)
                     <p class="name-underline" style="margin: 0;">{{ $pegawai->nama }}</p>
@@ -240,11 +266,10 @@
                 @endif
             </td>
 
-            {{-- KANAN: NAMA PIHAK KEDUA --}}
+            {{-- NAMA PIHAK KEDUA --}}
             <td>
                 @if($is_kepala_dinas)
                     <p class="name-underline" style="margin: 0;">H. MUHIDIN</p>
-                    {{-- <p style="margin: 0;">NIP. ...</p> --}}
                 @elseif($atasan_pegawai)
                     <p class="name-underline" style="margin: 0;">{{ $atasan_pegawai->nama }}</p>
                     <p style="margin: 0;">NIP. {{ $atasan_pegawai->nip }}</p>

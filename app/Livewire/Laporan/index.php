@@ -11,10 +11,10 @@ use App\Models\PerjanjianKinerja;
 #[Title('Pusat Laporan')]
 class Index extends Component
 {
-    // State untuk Tab Aktif (Default: PK)
+    // State Tab
     public $activeTab = 'pk';
 
-    // State untuk Filter Form
+    // State Filter
     public $selectedPegawaiId;
     public $year;
     public $month;
@@ -28,49 +28,50 @@ class Index extends Component
 
     public function render()
     {
-        // Ambil data pegawai untuk dropdown filter
-        $pegawais = Pegawai::orderBy('nama', 'asc')->get();
+        // Ambil data pegawai yang punya jabatan saja (biar list tidak kotor)
+        $pegawais = Pegawai::with('jabatan')
+            ->whereNotNull('jabatan_id')
+            ->orderBy('nama', 'asc')
+            ->get();
 
         return view('livewire.laporan.index', [
             'pegawais' => $pegawais
         ]);
     }
 
-    // --- LOGIC CETAK (Nanti kita isi logic PDF di sini satu per satu) ---
-    
+    // --- 1. LOGIC CETAK PERJANJIAN KINERJA (YANG BERMASALAH TADI) ---
     public function cetakPK()
     {
-        // Validasi simpel
-        if(!$this->selectedPegawaiId) {
-            // Jika mau cetak semua, nanti kita handle logicnya
-            // Untuk sekarang kita alert dulu
-            $this->dispatch('alert', [
-                'type' => 'info',
-                'title' => 'Info',
-                'message' => 'Fitur cetak masal sedang disiapkan. Pilih 1 pegawai dulu.'
-            ]);
+        // 1. Cek apakah pegawai sudah dipilih
+        if (empty($this->selectedPegawaiId)) {
+            // Gunakan Javacript alert standar jika sweetalert belum setup
+            $this->js("alert('Silakan pilih pegawai terlebih dahulu!')");
             return;
         }
 
-        // Cari ID PK berdasarkan Pegawai & Tahun
+        // 2. Ambil Data Pegawai
         $pegawai = Pegawai::find($this->selectedPegawaiId);
-        if(!$pegawai || !$pegawai->jabatan_id) {
-             $this->dispatch('alert', ['type' => 'error', 'title' => 'Gagal', 'message' => 'Pegawai tidak memiliki jabatan.']);
-             return;
+        
+        if (!$pegawai || !$pegawai->jabatan_id) {
+            $this->js("alert('Pegawai tidak memiliki jabatan aktif.')");
+            return;
         }
 
+        // 3. Cari Dokumen PK berdasarkan Jabatan & Tahun
         $pk = PerjanjianKinerja::where('jabatan_id', $pegawai->jabatan_id)
                                 ->where('tahun', $this->year)
                                 ->first();
 
-        if($pk) {
-            // Redirect ke route cetak yang sudah ada di web.php
+        // 4. Redirect jika ketemu, Alert jika kosong
+        if ($pk) {
             return redirect()->route('perjanjian.kinerja.print', ['id' => $pk->id]);
         } else {
-            $this->dispatch('alert', ['type' => 'warning', 'title' => 'Tidak Ditemukan', 'message' => 'Dokumen PK belum dibuat untuk pegawai ini.']);
+            $this->js("alert('Dokumen Perjanjian Kinerja tahun {$this->year} belum dibuat/ditemukan untuk pegawai ini.')");
         }
     }
 
+    // --- 2. LOGIC CETAK LAINNYA ---
+    
     public function cetakStatusPK()
     {
         return redirect()->route('laporan.status-pk.print', [
